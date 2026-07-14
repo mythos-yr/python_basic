@@ -6,72 +6,94 @@
 
 每次改了代码，怎么知道没把别的东西搞坏？靠测试。
 
-- **没有测试**：改了代码 → 手动点点看 → "好像没问题" → 上线 → 炸了
-- **有测试**：改了代码 → 跑 `pytest` → 3秒后看到红/绿 → 绿了安心上线
+- **没有测试**：改代码 → 手动点点 → "好像没问题" → 上线 → 炸了
+- **有测试**：改代码 → 跑 `pytest` → 3 秒绿了 → 放心上线
 
-测试分几个层次：
-- **单元测试**：测单个函数/方法（本题）
-- **集成测试**：测多个模块协作
-- **端到端测试**：模拟真实用户操作
+**测试三层**：单元测试（测函数）→ 集成测试（测模块协作）→ 端到端测试（模拟用户）。
 
 ---
 
-### 关键字/语法
+## 15.1 unittest——内置框架
 
-**unittest（内置）**：
+### 关键字/语法
 
 ```python
 import unittest
 
-class TestXXX(unittest.TestCase):
-    def setUp(self):           # 每个测试前执行
+class TestMath(unittest.TestCase):
+    def setUp(self):                          # 每个 test_ 方法前执行
+        self.data = [1, 2, 3, 4, 5]
+
+    def tearDown(self):                       # 每个 test_ 方法后执行
         pass
-    def tearDown(self):        # 每个测试后执行
-        pass
-    def test_something(self):  # 以 test_ 开头的方法
-        self.assertEqual(a, b)
-        self.assertTrue(cond)
-        with self.assertRaises(TypeError):
-            bad_code()
+
+    def test_sum(self):                       # 方法名必须以 test_ 开头
+        self.assertEqual(sum(self.data), 15)
+        self.assertTrue(sum(self.data) > 0)
+        self.assertIn(3, self.data)
+
+    def test_raises(self):
+        with self.assertRaises(ZeroDivisionError):
+            1 / 0
+
+if __name__ == "__main__":
+    unittest.main()
 ```
 
-**pytest（推荐——更简洁）**：
+### 常用断言方法
 
-```python
-import pytest
+| 断言 | 检查 |
+|------|------|
+| `assertEqual(a, b)` | a == b |
+| `assertTrue(x)` | bool(x) is True |
+| `assertFalse(x)` | bool(x) is False |
+| `assertIs(a, b)` | a is b |
+| `assertIn(a, b)` | a in b |
+| `assertRaises(Error)` | 抛出指定异常 |
+| `assertAlmostEqual(a, b)` | 浮点数近似相等 |
 
-def test_something():          # 函数名以 test_ 开头
-    assert func(1, 2) == 3      # 直接用 assert！
+---
 
-def test_raises():
-    with pytest.raises(ValueError, match="错误信息"):
-        bad_code()
+## 15.2 pytest——Python 测试的事实标准
+
+### 关键字/语法
+
+pytest 比 unittest 简洁得多：不需要 TestCase 类，直接用 `assert`。
+
+```bash
+pytest                          # 自动发现并运行所有测试
+pytest -v                       # 详细输出
+pytest -k "pattern"             # 只跑名字匹配的测试
+pytest test_file.py::test_func  # 只跑指定函数
+pytest --lf                     # 只跑上次失败的（开发利器）
+pytest -x                       # 遇到第一个失败就停
+pytest --cov=src                # 带覆盖率（需 pytest-cov）
 ```
 
-| pytest 核心功能 | 说明 |
-|----------------|------|
-| `@pytest.fixture` | 为测试准备依赖数据（自动注入） |
-| `@pytest.mark.parametrize` | 一套测试跑多组数据 |
-| `conftest.py` | 共享 fixture，pytest 自动发现 |
-| `pytest -v` | 详细输出 |
-| `pytest -k "pattern"` | 只跑名字匹配的测试 |
-| `pytest --lf` | 只跑上次失败的（开发时的利器） |
+**核心功能**：
+
+| 功能 | 语法 | 用途 |
+|------|------|------|
+| fixture | `@pytest.fixture` | 为测试准备可复用数据 |
+| parametrize | `@pytest.mark.parametrize` | 一套测试跑多组数据 |
+| conftest.py | 项目根目录下的文件 | 共享 fixture，pytest 自动发现 |
+| Mock | `unittest.mock.Mock` | 替代真实依赖（数据库、网络） |
+| patch | `unittest.mock.patch` | 临时替换模块中的对象 |
 
 ---
 
 ### 案例
 
-**案例1：pytest 基础——比 unittest 简洁得多**
+**案例1：pytest 基础——简洁对比 unittest**
 
 ```python
-# test_math.py
+# test_calc.py
 import pytest
 
-def add(a, b):
-    return a + b
+def add(a, b): return a + b
 
 def test_add():
-    assert add(1, 2) == 3
+    assert add(1, 2) == 3           # 直接用 assert！
     assert add(-1, -2) == -3
 
 def test_divide_by_zero():
@@ -89,53 +111,48 @@ def test_divide_by_zero():
 ])
 def test_upper(input, expected):
     assert input.upper() == expected
-# pytest 自动跑3次！一次失败不影响其他
+# pytest 自动跑 3 次！一次失败不影响其他
 ```
 
-**案例3（工业级）：Mock——隔离外部依赖**
+**案例3：Mock——不依赖真实数据库**
 
 ```python
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-# 被测代码
-def get_user_name(db, user_id):
-    user = db.query(f"SELECT * FROM users WHERE id={user_id}")
-    return user.get("name", "Unknown") if user else "Unknown"
+def get_user(db, uid):
+    row = db.query(f"SELECT * FROM users WHERE id={uid}")
+    return row.get("name", "Unknown")
 
-# 测试：不依赖真实数据库
-def test_get_user_name():
+def test_get_user():
     mock_db = Mock()
     mock_db.query.return_value = {"id": 1, "name": "Alice"}
 
-    name = get_user_name(mock_db, 1)
-    assert name == "Alice"
+    assert get_user(mock_db, 1) == "Alice"
     mock_db.query.assert_called_once_with("SELECT * FROM users WHERE id=1")
-
-def test_get_user_missing():
-    mock_db = Mock()
-    mock_db.query.return_value = None
-
-    name = get_user_name(mock_db, 999)
-    assert name == "Unknown"
 ```
 
 **案例4：fixture——准备和清理测试数据**
 
 ```python
 @pytest.fixture
-def sample_users():
-    """准备测试数据——多个测试可以共用"""
-    data = [
-        {"name": "Alice", "age": 30},
-        {"name": "Bob", "age": 25},
-    ]
-    yield data    # 传给测试函数
-    # yield 之后 = 清理代码
-    print("清理完成")
+def sample_data():
+    data = [{"name": "Alice"}, {"name": "Bob"}]   # setup
+    yield data                                      # 传给测试
+    print("cleanup")                                # teardown
 
-def test_filter_adults(sample_users):
-    adults = [u for u in sample_users if u["age"] >= 18]
-    assert len(adults) == 2
+def test_with_fixture(sample_data):
+    assert len(sample_data) == 2
+```
+
+---
+
+## 15.3 测试覆盖率
+
+```bash
+pip install pytest-cov
+
+pytest --cov=my_package --cov-report=term-missing
+# 输出每个文件的覆盖率，标注哪些行没被测试覆盖
 ```
 
 ---
@@ -144,9 +161,9 @@ def test_filter_adults(sample_users):
 
 | 概念 | 说明 |
 |------|------|
-| `unittest` | 内置框架，Java 风格 |
-| `pytest` | 事实标准，语法简洁 |
-| `Mock` | 替代真实对象，验证调用行为 |
+| `unittest` | 内置框架，TestCase 子类 + assertXxx 方法 |
+| `pytest` | 事实标准，直接 `assert`，fixture + parametrize |
+| `Mock` | 替代真实对象，可验证调用行为和参数 |
 | `patch` | 临时替换模块中的对象 |
-| `fixture` | 为测试准备可复用的数据 |
-| `parametrize` | 一组测试参数跑多次 |
+| `fixture` | 可复用的测试数据准备 |
+| `parametrize` | 一套代码跑多组输入 |

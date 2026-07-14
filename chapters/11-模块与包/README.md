@@ -4,125 +4,150 @@
 
 ## 11.1 模块
 
-### 理论：为什么需要拆成多个文件？
+### 理论：程序大了就要拆成多个文件
 
-任何超过 200 行的程序都该拆分。把相关函数/类放在一个 `.py` 文件里，就是**模块**。通过 `import` 在其他地方使用。
+一个 `.py` 文件就是一个**模块**。通过 `import` 在其他地方使用它的内容。
 
-**模块是天然的单例**：无论被 import 多少次，一个模块只被加载执行一次（结果缓存在 `sys.modules` 中）。
+**模块是天然的单例**：无论被 import 多少次，一个模块只被加载执行一次，结果缓存在 `sys.modules` 中。
 
 ---
 
 ### 关键字/语法
 
-```python
-import module                # 导入整个模块
-from module import name      # 只导入特定名称
-from module import name as alias  # 用别名
-import module as alias       # 模块别名
-```
+**import 的四种写法**：
+
+| 写法 | 效果 | 使用方式 |
+|------|------|---------|
+| `import module` | 导入整个模块 | `module.func()` |
+| `import module as alias` | 别名 | `alias.func()` |
+| `from module import name` | 只导入特定名称 | 直接用 `func()` |
+| `from module import *` | 导入所有公开名称 | 不推荐，污染命名空间 |
+
+**关键变量**：
 
 | 变量 | 作用 |
 |------|------|
 | `__name__` | 当前模块名；直接运行时为 `"__main__"` |
-| `sys.path` | 模块搜索路径列表 |
+| `sys.path` | 模块搜索路径的列表 |
 | `sys.modules` | 已加载模块的缓存字典 |
+| `dir(module)` | 列出模块中所有名字 |
+
+**`__name__ == "__main__"` 的作用**：当直接运行 `python module.py` 时，`__name__` 为 `"__main__"`；当被 `import module` 时，`__name__` 为 `"module"`。用于区分"独立运行"和"被导入"。
 
 ---
 
 ### 案例
 
-**案例1：`__name__ == "__main__"` 的作用**
+**案例1：四种 import 方式的对比**
 
 ```python
-# utils.py
+# 1. 导入整个模块（命名空间隔离，推荐）
+import math
+print(math.sqrt(16))    # 4.0
+
+# 2. 别名
+import numpy as np
+arr = np.array([1, 2, 3])
+
+# 3. 只导入特定名称（方便，但要小心名字冲突）
+from math import sqrt, pi
+print(sqrt(25))          # 直接用，不需要 math. 前缀
+
+# 4. 不推荐：from math import *  —— 你不知道导入了什么
+```
+
+**案例2：`__name__` 的经典用法——"既能导入，也能自测"**
+
+```python
+# my_module.py
 def helper():
     return "工具函数"
 
 if __name__ == "__main__":
-    # 这部分只在直接运行 python utils.py 时执行
-    # 被 import utils 时不会执行
-    print("这是模块自测代码")
+    # 以下代码只在 python my_module.py 时运行
+    # 被 import my_module 时不会运行
+    print("=== 模块自测 ===")
+    assert helper() == "工具函数"
+    print("=== 通过 ===")
 ```
 
-**案例2：三种 import 方式的区别**
+**案例3（工业级）：模块级配置单例**
 
 ```python
-# import module —— 用 module.name 访问，命名空间隔离好
-import math
-print(math.sqrt(16))
-
-# from module import name —— 直接用 name，但可能和现有变量冲突
-from math import sqrt
-print(sqrt(25))
-
-# import as alias —— 处理长名字或约定别名
-import numpy as np
-print(np.array([1, 2, 3]))
-```
-
-**案例3（工业级）：模块级配置——利用"只加载一次"实现全局单例**
-
-```python
-# config.py
+# config.py —— 利用"模块只加载一次"实现全局单例
 import os
 
-_config = {
-    "DEBUG": False,
-    "DB_HOST": "localhost",
-    "DB_PORT": 5432,
-}
+_config = {"DEBUG": False, "DB_HOST": "localhost", "DB_PORT": 5432}
 
 # 启动时从环境变量覆盖
 for key in _config:
-    env_val = os.getenv(f"APP_{key}")
-    if env_val is not None:
-        _config[key] = type(_config[key])(env_val)
+    val = os.getenv(f"APP_{key}")
+    if val is not None:
+        _config[key] = type(_config[key])(val)
 
-def get(key):
-    return _config.get(key)
+def get(key):       return _config.get(key)
+
+# 任何文件中：from config import get; get("DB_HOST")
+# 整个进程共享同一份配置
 ```
 
 ---
 
 ## 11.2 包
 
-### 理论：把模块组织成层级结构
+### 理论：把模块组织成目录树
 
-**包就是一个包含 `__init__.py` 的目录**。`__init__.py` 告诉 Python：这个目录是一个包。
+**包 = 包含 `__init__.py` 的目录**。`__init__.py` 告诉 Python 此目录是包。Python 3.3+ 可以省略，但建议保留。
 
 ```python
-# 项目结构
 mypkg/
-├── __init__.py      # ← 这个文件让 mypkg 成为包
+├── __init__.py       # 让 mypkg 成为包
 ├── core.py
-└── utils.py
-
-# 调用方式
-from mypkg import core
-from mypkg.core import some_func
+├── utils.py
+└── subpkg/
+    ├── __init__.py
+    └── module.py
 ```
+
+---
+
+### 关键字/语法
+
+**绝对导入 vs 相对导入**：
+
+```python
+# 绝对导入（写全路径）
+from mypkg.core import CoreClass
+
+# 相对导入（在包内部使用）
+from .core import CoreClass    # . = 当前目录
+from ..utils import helper     # .. = 上级目录
+```
+
+**`__all__`**：控制 `from module import *` 导出哪些名字：
+
+```python
+__all__ = ["public_func", "MyClass"]   # 只导出这两个
+```
+
+---
 
 ### 案例
 
-**案例1：包的相对导入和绝对导入**
-
-```python
-# mypkg/core.py
-from .utils import helper      # 相对导入（推荐在包内使用）
-from mypkg.utils import helper  # 绝对导入（写全路径）
-```
-
-**案例2：`__all__` 控制 `from xxx import *` 导出什么**
+**案例1：创建包和使用**
 
 ```python
 # mypkg/__init__.py
-__all__ = ["public_func", "CoreClass"]  # 只有这两个被导出
-
 from .core import CoreClass
-from .utils import public_func, _private_func
+from .utils import helper
+
+__all__ = ["CoreClass", "helper"]
+
+# 使用方:
+# from mypkg import CoreClass, helper
 ```
 
-**案例3：用 pyproject.toml 构建可发布的包**
+**案例2：pyproject.toml 构建可发布包**
 
 ```toml
 [project]
@@ -132,7 +157,7 @@ requires-python = ">=3.10"
 dependencies = ["requests>=2.28"]
 
 [project.scripts]
-mycli = "mypackage.cli:main"     # pip install 后可直接运行 mycli
+mycli = "mypackage.cli:main"   # pip install 后可直接运行 mycli
 
 [build-system]
 requires = ["setuptools>=68.0"]
@@ -143,52 +168,70 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 ## 11.3 常用标准库速查
 
-### datetime
+### datetime——日期时间处理
 
 ```python
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
-now = datetime.now()
-print(now.strftime("%Y-%m-%d %H:%M:%S"))    # 格式化输出
+now = datetime.now()                              # 当前时间
+print(now.strftime("%Y-%m-%d %H:%M:%S"))          # 格式化输出
 dt = datetime.strptime("2026-07-14", "%Y-%m-%d")  # 字符串解析
-tomorrow = now + timedelta(days=1)           # 时间计算
+tomorrow = now + timedelta(days=1)                # 时间计算
+
+# 时间差
+diff = datetime(2026, 7, 14) - datetime(2026, 7, 1)
+print(diff.days)  # 13
 ```
 
-### functools
+### functools——高阶函数工具
 
 ```python
-from functools import lru_cache, partial
+from functools import lru_cache, partial, reduce, wraps
 
-# 缓存函数结果（最有用的装饰器之一）
+# lru_cache: 缓存函数结果（最实用的装饰器之一）
 @lru_cache(maxsize=128)
 def fib(n):
     if n < 2: return n
-    return fib(n-1) + fib(n-2)   # 不用 lru_cache 会重复计算
+    return fib(n-1) + fib(n-2)
 
-# 固定函数参数
-square = partial(pow, exp=2)
-print(square(5))  # 25
+# partial: 固定函数参数
+square = partial(pow, exp=2)   # square(5) = 25
+
+# reduce: 累积归约
+from functools import reduce
+product = reduce(lambda x, y: x * y, [1, 2, 3, 4, 5])  # 120
 ```
 
-### collections
+### collections——高级容器
 
 ```python
-from collections import deque, defaultdict, Counter
+from collections import deque, defaultdict, Counter, namedtuple
 
-# 固定大小队列（自动丢弃旧的）
-history = deque(maxlen=5)
-for i in range(10):
-    history.append(i)
-print(list(history))  # [5, 6, 7, 8, 9]
+# deque: 双端队列，两端 O(1)
+dq = deque([1, 2, 3]); dq.appendleft(0); dq.pop()
 
-# 自动创建默认值的字典
-groups = defaultdict(list)
+# defaultdict: 自动创建默认值
+dd = defaultdict(list)
 for word in ["apple", "banana", "avocado"]:
-    groups[word[0]].append(word)
+    dd[word[0]].append(word)
 
-# 频次统计
-text = "abracadabra"
-print(Counter(text).most_common(2))  # [('a', 5), ('b', 2)]
+# Counter: 频次统计
+c = Counter("abracadabra")
+print(c.most_common(2))  # [('a', 5), ('b', 2)]
+```
+
+### itertools——迭代器工具
+
+```python
+import itertools
+
+itertools.count(start=0, step=2)      # 无限计数
+itertools.cycle(["A", "B", "C"])      # 无限循环
+itertools.chain([1,2], [3,4])         # 串联
+itertools.combinations("ABC", 2)      # 组合
+itertools.permutations("ABC", 2)      # 排列
+itertools.product("AB", "12")         # 笛卡尔积
+itertools.islice(it, 10)              # 取前 10 个
 ```
 
 ---
@@ -197,16 +240,16 @@ print(Counter(text).most_common(2))  # [('a', 5), ('b', 2)]
 
 | 导入方式 | 场景 |
 |----------|------|
-| `import module` | 用全部功能，命名空间隔离好 |
-| `from module import X` | 只用特定几个类/函数 |
-| `import module as alias` | 长名模块用别名（`import numpy as np`） |
+| `import module` | 用全部功能，命名空间隔离 |
+| `from module import X` | 只用到几个名称 |
+| `import numpy as np` | 长名模块用别名 |
 | `from . import X` | 包内相对导入 |
 
-| 标准库 | 用途 |
-|--------|------|
-| `collections` | deque, defaultdict, Counter |
-| `functools` | lru_cache, partial, wraps |
-| `datetime` | 时间日期处理 |
-| `itertools` | 迭代器工具 |
-| `pathlib` | 现代文件路径 |
+| 标准库 | 一句话 |
+|--------|--------|
+| `collections` | deque, defaultdict, Counter, namedtuple |
+| `functools` | lru_cache, partial, reduce, wraps |
+| `datetime` | 时间日期 |
+| `itertools` | count, cycle, chain, combinations, islice |
 | `json` | JSON 序列化 |
+| `pathlib` | 现代路径操作 |
