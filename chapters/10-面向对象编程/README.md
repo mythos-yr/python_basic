@@ -2,648 +2,350 @@
 
 ---
 
-## 10.1 类与对象基础
+## 10.1 类和对象——把"东西"抽象成代码
 
-### 知识点：class、__init__、self
+### 理论：为什么需要面向对象？
 
-**案例1：理解 self —— 谁调用，self 就是谁**
+当你的代码里出现了**一组函数操作同一组数据**时，就是该用类的时候了。
+
+**类比**：不是面向对象的写法，就像把所有工具散落在地上，谁都能拿，容易乱。面向对象是把相关的数据和操作**打包**在一起，像一个工具箱——打开箱子就知道里面有什么工具（方法）和零件（属性）。
+
+**核心概念**：
+
+| 概念 | 含义 | 类比 |
+|------|------|------|
+| 类 (class) | 创建对象的"模板" | 汽车设计图 |
+| 对象/实例 | 按照模板造出来的具体东西 | 你开的那辆具体的车 |
+| 属性 (attribute) | 对象拥有的数据 | 颜色、速度、油量 |
+| 方法 (method) | 对象能做什么 | 加速、刹车、鸣笛 |
+
+---
+
+### 关键字/语法
+
+```python
+class 类名:
+    """文档字符串"""
+
+    类属性 = 值               # 所有实例共享
+
+    def __init__(self, 参数):
+        self.实例属性 = 参数    # 每个实例独立的属性
+
+    def 方法(self, 参数):
+        # self 指向调用此方法的实例
+        pass
+```
+
+| 关键字 | 作用 |
+|--------|------|
+| `class` | 定义一个类 |
+| `__init__` | 构造方法，创建对象时自动调用 |
+| `self` | 代表**调用方法的那个实例**（Python 自动传入） |
+
+**`self` 的本质**：`obj.method(arg)` 等价于 `ClassName.method(obj, arg)`。Python 把 `.` 前面的对象自动传给方法的第一个参数。
+
+---
+
+### 案例
+
+**案例1：基础类的定义和使用**
 
 ```python
 class Dog:
-    """狗类：演示 self 的本质"""
+    species = "Canis familiaris"   # 类属性：所有狗共享
 
-    # 类属性：所有实例共享
-    species = "Canis familiaris"
-
-    def __init__(self, name: str, age: int):
-        # 实例属性：每个实例独立拥有
-        self.name = name
+    def __init__(self, name, age):
+        self.name = name            # 实例属性：每条狗不同
         self.age = age
-        print(f"创建了 {self.name}，self 的 id = {id(self)}")
 
     def bark(self):
-        """self 指向调用这个方法的实例"""
-        print(f"{self.name} (id={id(self)}) 在叫: 汪汪！")
+        return f"{self.name}: 汪汪！"
 
+d1 = Dog("旺财", 3)
+d2 = Dog("来福", 5)
 
-# self 是谁？就是调用方法的那个对象
-dog1 = Dog("旺财", 3)
-dog2 = Dog("来福", 5)
-
-dog1.bark()    # self = dog1
-dog2.bark()    # self = dog2
-
-# Dog.bark(dog1)  # 等价于 dog1.bark()——方法的本质是函数
+print(d1.bark())         # 旺财: 汪汪！
+print(d2.name)           # 来福
+print(d1.species)        # Canis familiaris (类属性，共享的)
 ```
 
-**案例2：类属性 vs 实例属性 —— 经典陷阱**
+**案例2：类属性 vs 实例属性——可变类属性的陷阱**
 
 ```python
 class Team:
-    # 类属性：所有实例共享一个列表！
-    members: list = []
+    members = []          # ❌ 类属性，所有实例共享！
 
-    def __init__(self, name: str):
-        self.name = name   # 实例属性
+    def __init__(self, name):
+        self.name = name
 
-# ❌ 陷阱：类属性是可变的
-team_a = Team("A队")
-team_b = Team("B队")
-
-team_a.members.append("张三")
-print(f"A队: {team_a.members}")  # ['张三']
-print(f"B队: {team_b.members}")  # ['张三'] ← 也被影响了！
-
-# 为什么会这样？
-# team_a.members 实际上访问的是 Team.members（类属性）
-# 因为 team_a 实例上没有 members 属性，所以沿着 MRO 找到了类的
+a = Team("A队")
+b = Team("B队")
+a.members.append("张三")  # 看起来只改了 a
+print(b.members)           # ['张三'] —— b 也被影响了！
 
 # ✅ 正确做法：在 __init__ 中初始化实例属性
 class TeamFixed:
-    def __init__(self, name: str):
+    def __init__(self, name):
         self.name = name
-        self.members: list = []   # 每个实例独立的列表！
+        self.members = []  # 每个实例独立的列表
 ```
 
-**案例3：工业级 —— @dataclass 简化数据类**
+**案例3：@dataclass——一行装饰器替代所有样板代码**
 
 ```python
-from dataclasses import dataclass, field, asdict
-from typing import List, Optional
-from datetime import datetime
+from dataclasses import dataclass, field
+from typing import List
 
-# ❌ 传统写法：几十行样板代码
-class UserOld:
-    def __init__(self, name, age, email=None):
-        self.name = name
-        self.age = age
-        self.email = email
+# ❌ 传统写法：__init__, __repr__, __eq__ 全要手写
 
-    def __repr__(self):
-        return f"User(name={self.name!r}, age={self.age!r})"
-
-    def __eq__(self, other):
-        if not isinstance(other, UserOld):
-            return False
-        return self.name == other.name and self.age == other.age
-
-# ✅ @dataclass：一行装饰器替代几十行样板代码
+# ✅ @dataclass：自动生成！只用声明字段
 @dataclass
 class User:
-    """用户数据类——自动生成 __init__, __repr__, __eq__"""
     name: str
     age: int
-    email: Optional[str] = None
-    tags: List[str] = field(default_factory=list)  # 注意：可变默认值用 default_factory
-    created_at: datetime = field(default_factory=datetime.now)
+    email: str = ""
+    tags: List[str] = field(default_factory=list)  # 可变默认值必须这样写
 
-    @property
-    def is_adult(self) -> bool:
-        return self.age >= 18
-
-
-# 自动生成的方法
-user1 = User("Alice", 30, email="alice@example.com")
-user2 = User("Alice", 30, email="alice@example.com")
-
-print(user1)                      # User(name='Alice', age=30, ...)
-print(user1 == user2)             # True（自动生成的 __eq__）
-print(asdict(user1))              # 转为字典
-
-# field() 的高级用法
-@dataclass
-class APIConfig:
-    host: str
-    port: int = 443
-    timeout: float = field(default=30.0, metadata={"unit": "seconds"})
-    _cache: dict = field(default_factory=dict, repr=False)  # repr=False 不显示
-
-config = APIConfig("api.example.com")
-print(config)  # APIConfig(host='api.example.com', port=443, timeout=30.0)
+user = User("Alice", 30, "a@example.com")
+print(user)                 # User(name='Alice', age=30, email='a@example.com')
+print(user == User("Alice", 30))  # True
 ```
 
 ---
 
-## 10.2 访问控制与 property
+## 10.2 封装——控制谁能访问什么
 
-### 知识点：下划线约定与 property 装饰器
+### 理论：Python 靠约定而非强制
 
-**案例1：单下划线、双下划线的区别**
+Python 没有 Java/C++ 那样的 private/public 关键字。它靠**命名约定**：
+
+| 写法 | 含义 | 实际效果 |
+|------|------|----------|
+| `name` | 公开属性 | 随便访问 |
+| `_name` | 约定"受保护的" | 不强制，IDE 提示你不该用 |
+| `__name` | 名称改写 (name mangling) | 变成 `_ClassName__name`，不真隐藏但防止子类意外覆盖 |
+
+---
+
+### 关键字/语法
 
 ```python
-class AccessDemo:
-    def __init__(self):
-        self.public = "公开属性"        # 公开：随便访问
-        self._protected = "约定保护"    # _ 开头：约定为"内部使用"
-        self.__private = "名称改写"     # __ 开头：触发 name mangling
-
-obj = AccessDemo()
-print(obj.public)              # 公开属性
-print(obj._protected)          # 约定保护（Python 不强制，但 IDE 会警告）
-
-# print(obj.__private)         # AttributeError!
-# 但实际上可以通过改写后的名字访问：
-print(obj._AccessDemo__private)  # 名称改写（不推荐！）
+@property       # 把方法变成"属性"的读取方式（getter）
+@xxx.setter     # 定义属性的设置逻辑（setter），可加校验
+@xxx.deleter    # 定义属性的删除逻辑（deleter）
 ```
 
-**案例2：property —— 让方法像属性一样访问**
+**property 的作用**：让外部像访问普通属性一样访问方法，同时内部保留校验逻辑。从 `obj.get_value()` 变成 `obj.value`。
+
+---
+
+### 案例
+
+**案例1：下划线约定**
+
+```python
+class BankAccount:
+    def __init__(self, owner, balance):
+        self.owner = owner           # 公开
+        self._balance = balance      # 约定：内部属性，别直接改
+        self.__pin = "1234"         # 名称改写
+
+acc = BankAccount("Alice", 1000)
+print(acc._balance)                  # 能访问，但 IDE 会警告
+# print(acc.__pin)                   # AttributeError!
+print(acc._BankAccount__pin)         # "1234" —— 改写的名字还是能访问
+```
+
+**案例2：property——让属性带校验**
 
 ```python
 class Temperature:
-    """温度类：用 property 控制属性的读写"""
-
-    def __init__(self, celsius: float = 0):
-        self._celsius = celsius   # 内部存储用 _celsius
+    def __init__(self, celsius=0):
+        self._celsius = celsius
 
     @property
-    def celsius(self) -> float:
-        """读取摄氏温度（像属性一样访问）"""
+    def celsius(self):
+        """读取——像访问属性一样"""
         return self._celsius
 
     @celsius.setter
-    def celsius(self, value: float):
-        """设置摄氏温度（带校验）"""
+    def celsius(self, value):
+        """设置——带校验"""
         if value < -273.15:
-            raise ValueError(f"温度不能低于绝对零度（-273.15°C），得到: {value}")
+            raise ValueError("低于绝对零度！")
         self._celsius = value
 
     @property
-    def fahrenheit(self) -> float:
-        """华氏温度（只读属性，没有 setter）"""
-        return self._celsius * 9 / 5 + 32
+    def fahrenheit(self):
+        """华氏温度——只读（无 setter）"""
+        return self._celsius * 9/5 + 32
 
-
-temp = Temperature(25)
-print(temp.celsius)       # 25    — 像属性一样用，不需要 temp.celsius()
-print(temp.fahrenheit)    # 77.0  — 只读属性
-
-temp.celsius = 100        # 调用 setter
-# temp.celsius = -500     # ValueError!
-
-# temp.fahrenheit = 90    # AttributeError! —— 没有 setter
+t = Temperature(25)
+print(t.celsius)       # 25 —— 不需要 t.celsius()
+t.celsius = 30          # 调用 setter 校验
+# t.fahrenheit = 90     # AttributeError —— 只读！
 ```
 
-**案例3：工业级 —— ORM 风格的字段验证**
+**案例3（工业级）：描述符——可复用的字段校验**
 
 ```python
-from dataclasses import dataclass, field
-from typing import Any, Optional
-import re
-
 class ValidatedField:
-    """
-    带验证的描述符字段。
-    像 Django ORM 的字段一样，自动校验类型和约束。
-    """
+    """可复用的字段验证器——Django ORM 的字段就是这样做出来的"""
 
-    def __init__(self, field_type, required=True, min_length=None, max_length=None, pattern=None):
+    def __init__(self, field_type):
         self.field_type = field_type
-        self.required = required
-        self.min_length = min_length
-        self.max_length = max_length
-        self.pattern = re.compile(pattern) if pattern else None
-        self.name = None  # 在 __set_name__ 中设置
+        self.name = None
 
     def __set_name__(self, owner, name):
-        self.name = name
-        self._attr_name = f"_{name}"
+        self.name = f"_{name}"
 
     def __get__(self, obj, owner=None):
         if obj is None:
             return self
-        return getattr(obj, self._attr_name, None)
+        return getattr(obj, self.name, None)
 
     def __set__(self, obj, value):
-        # 类型检查
-        if value is not None and not isinstance(value, self.field_type):
-            actual_type = type(value).__name__
-            expected = self.field_type.__name__
-            raise TypeError(f"{self.name}: 需要 {expected}，得到 {actual_type}")
+        if not isinstance(value, self.field_type):
+            raise TypeError(f"需要 {self.field_type.__name__}")
+        setattr(obj, self.name, value)
 
-        # 必填检查
-        if self.required and (value is None or value == ""):
-            raise ValueError(f"{self.name} 是必填项")
+class User:
+    name = ValidatedField(str)
+    age = ValidatedField(int)
 
-        # 长度检查
-        if self.min_length and isinstance(value, str) and len(value) < self.min_length:
-            raise ValueError(f"{self.name}: 最小长度 {self.min_length}")
+    def __init__(self, name, age):
+        self.name = name    # 触发描述符的 __set__
+        self.age = age
 
-        if self.max_length and isinstance(value, str) and len(value) > self.max_length:
-            raise ValueError(f"{self.name}: 最大长度 {self.max_length}")
-
-        # 正则检查
-        if self.pattern and isinstance(value, str) and not self.pattern.match(value):
-            raise ValueError(f"{self.name}: 不匹配模式 {self.pattern.pattern}")
-
-        setattr(obj, self._attr_name, value)
-
-
-# 使用描述符的模型类
-class UserModel:
-    """类似 Django Model 的用户模型"""
-
-    name = ValidatedField(str, min_length=2, max_length=50)
-    email = ValidatedField(str, required=True, pattern=r"^[\w\.-]+@[\w\.-]+\.\w+$")
-    age = ValidatedField(int, required=False)
-
-    def __init__(self, **kwargs):
-        for key, value in kwargs.items():
-            setattr(self, key, value)
-        # 检查必填项
-        for attr_name in dir(type(self)):
-            attr = getattr(type(self), attr_name)
-            if isinstance(attr, ValidatedField) and attr.required:
-                if getattr(self, attr_name, None) is None:
-                    raise ValueError(f"{attr_name} 是必填项")
-
-
-# 使用
-try:
-    user = UserModel(name="A", email="bad_email", age="not_int")
-except (TypeError, ValueError) as e:
-    print(f"校验失败: {e}")
-
-user = UserModel(name="Alice", email="alice@example.com", age=30)
-print(f"创建成功: {user.name}, {user.email}, {user.age}")
+# user = User("Alice", "三十")  # TypeError: 需要 int
 ```
 
 ---
 
-## 10.3 魔术方法 (Dunder Methods)
+## 10.3 继承——利用已有的，扩展自己的
 
-### 知识点：让自定义对象像内置类型一样运作
+### 理论：is-a 关系用继承，has-a 关系用组合
 
-**案例1：__str__ vs __repr__**
+如果 B 是 A 的一种（狗是动物的一种），用**继承**。如果 B 包含 A（汽车包含引擎），用**组合**。
 
-```python
-class Point:
-    def __init__(self, x: float, y: float):
-        self.x = x
-        self.y = y
-
-    def __repr__(self):
-        """给开发者看的——应该能"重现"这个对象"""
-        return f"Point({self.x}, {self.y})"
-
-    def __str__(self):
-        """给用户看的——应该可读性强"""
-        return f"({self.x}, {self.y})"
-
-    def __eq__(self, other):
-        if not isinstance(other, Point):
-            return NotImplemented
-        return self.x == other.x and self.y == other.y
-
-    def __add__(self, other):
-        return Point(self.x + other.x, self.y + other.y)
-
-    def __abs__(self):
-        """点到原点的距离"""
-        return (self.x ** 2 + self.y ** 2) ** 0.5
-
-
-p1 = Point(3, 4)
-p2 = Point(1, 2)
-
-print(p1)                 # (3, 4) — 调用 __str__
-print(repr(p1))           # Point(3, 4) — 调用 __repr__
-print(p1 == p2)           # False — 调用 __eq__
-print(p1 + p2)            # (4, 6) — 调用 __add__
-print(abs(p1))            # 5.0 — 调用 __abs__
-```
-
-**案例2：模拟容器——__getitem__、__setitem__、__len__**
-
-```python
-class HistoryList:
-    """带历史记录功能的列表"""
-
-    def __init__(self):
-        self._data = []
-        self._history = []   # 操作历史
-
-    def append(self, item):
-        self._data.append(item)
-        self._history.append(f"添加: {item}")
-
-    def __getitem__(self, index):
-        return self._data[index]
-
-    def __setitem__(self, index, value):
-        old = self._data[index]
-        self._data[index] = value
-        self._history.append(f"修改: [{index}] {old} → {value}")
-
-    def __len__(self):
-        return len(self._data)
-
-    def __contains__(self, item):
-        return item in self._data
-
-    def __iter__(self):
-        return iter(self._data)
-
-    def __repr__(self):
-        return f"HistoryList({self._data})"
-
-    def get_history(self):
-        return self._history
-
-
-hl = HistoryList()
-hl.append("A")
-hl.append("B")
-hl.append("C")
-
-print(len(hl))            # 3 —— __len__
-print(hl[1])              # B —— __getitem__
-print("B" in hl)          # True —— __contains__
-print([x for x in hl])    # ['A', 'B', 'C'] —— __iter__
-
-hl[1] = "X"               # __setitem__
-print(hl.get_history())
-# ['添加: A', '添加: B', '添加: C', '修改: [1] B → X']
-```
-
-**案例3：工业级 —— 惰性属性缓存（__getattr__ 实现懒加载）**
-
-```python
-import time
-from typing import Dict, Callable
-
-class LazyModel:
-    """
-    惰性加载模型。
-    昂贵的属性（数据库查询、网络请求）直到被访问时才计算，
-    计算后被缓存，避免重复计算。
-    """
-
-    def __init__(self, user_id: int):
-        self.user_id = user_id
-        self._cache: Dict[str, object] = {}
-        self._loaders: Dict[str, Callable] = {
-            "profile": self._load_profile,
-            "orders": self._load_orders,
-            "recommendations": self._load_recommendations,
-        }
-
-    # -------- 惰性加载器（模拟昂贵操作）--------
-    def _load_profile(self):
-        print(f"  [昂贵操作] 从数据库加载用户 {self.user_id} 的资料...")
-        time.sleep(0.5)
-        return {"name": "Alice", "age": 30, "city": "Beijing"}
-
-    def _load_orders(self):
-        print(f"  [昂贵操作] 从数据库加载用户 {self.user_id} 的订单...")
-        time.sleep(0.8)
-        return [{"id": 101, "amount": 99.9}, {"id": 102, "amount": 199.9}]
-
-    def _load_recommendations(self):
-        print(f"  [昂贵操作] 计算用户 {self.user_id} 的推荐...")
-        time.sleep(1.0)
-        return ["Python入门", "算法导论", "设计模式"]
-
-    # -------- 魔法方法 --------
-    def __getattr__(self, name: str):
-        """
-        访问不存在的属性时才触发！
-        注意：如果属性已经存在于实例的 __dict__ 中，__getattr__ 不会被调用。
-        """
-        if name in self._loaders:
-            # 执行加载
-            value = self._loaders[name]()
-            # 缓存到实例属性（下次访问直接走 __dict__，不再触发 __getattr__）
-            setattr(self, name, value)
-            return value
-        raise AttributeError(f"'{type(self).__name__}' 没有属性 '{name}'")
-
-
-# 使用
-print("创建 LazyModel 对象（尚未加载任何数据）")
-user = LazyModel(user_id=42)
-
-print("\n第一次访问 profile（触发加载）:")
-print(user.profile)     # 触发 __getattr__ → _load_profile → 缓存
-
-print("\n第二次访问 profile（从缓存读取，不会重新加载）:")
-print(user.profile)     # 走 __dict__，不再触发 __getattr__
-
-print("\n第一次访问 orders（触发加载）:")
-print(user.orders)
-```
+**MRO（方法解析顺序）**：多继承时，Python 用 C3 线性化算法决定先找哪个父类。`super()` 就是按 MRO 顺序找下一个类。
 
 ---
 
-## 10.4 继承与多态
+### 关键字/语法
 
-### 知识点：super() 与 MRO
+```python
+class Child(Parent):
+    super().__init__(args)      # 调用父类的 __init__
+    super().method()             # 调用父类的方法
+```
 
-**案例1：super() 的正确用法**
+| 关键字 | 作用 |
+|--------|------|
+| `class C(P)` | C 继承 P |
+| `super()` | 按 MRO 顺序访问父类方法 |
+| `isinstance(obj, cls)` | obj 是 cls 或其子类的实例吗？ |
+| `issubclass(cls, parent)` | cls 是 parent 的子类吗？ |
+
+---
+
+### 案例
+
+**案例1：基础继承与 super()**
 
 ```python
 class Animal:
-    def __init__(self, name: str):
+    def __init__(self, name):
         self.name = name
-        print(f"Animal.__init__: {self.name}")
 
     def speak(self):
         return f"{self.name} 发出声音"
 
-class Pet(Animal):
-    def __init__(self, name: str, owner: str):
-        super().__init__(name)          # ← 调用父类的 __init__
-        self.owner = owner
-        print(f"Pet.__init__: 主人是 {self.owner}")
+class Cat(Animal):
+    def __init__(self, name, breed):
+        super().__init__(name)     # 调用父类的 __init__
+        self.breed = breed
 
     def speak(self):
-        parent_result = super().speak()  # ← 调用父类的 speak
-        return f"{parent_result}，然后向主人 {self.owner} 撒娇"
+        parent = super().speak()   # 调用父类的 speak
+        return f"{parent}——喵喵！"
 
-
-cat = Pet("小花", "Alice")
-print(cat.speak())
-# 输出:
-# Animal.__init__: 小花
-# Pet.__init__: 主人是 Alice
-# 小花 发出声音，然后向主人 Alice 撒娇
+cat = Cat("小花", "英短")
+print(cat.speak())  # 小花 发出声音——喵喵！
 ```
 
-**案例2：多继承与 MRO**
+**案例2：用 MRO 理解 super() 的顺序**
 
 ```python
 class A:
-    def method(self):
-        print("A.method")
+    def say(self):
+        print("A")
 
 class B(A):
-    def method(self):
-        print("B.method")
-        super().method()
+    def say(self):
+        print("B")
+        super().say()
 
 class C(A):
-    def method(self):
-        print("C.method")
-        super().method()
+    def say(self):
+        print("C")
+        super().say()
 
 class D(B, C):
-    """多继承：B 和 C 都继承 A"""
-    def method(self):
-        print("D.method")
-        super().method()   # super() 按 MRO 顺序找下一个
+    def say(self):
+        print("D")
+        super().say()
 
-
-# MRO: Method Resolution Order（方法解析顺序）
 print(D.__mro__)
-# (<class 'D'>, <class 'B'>, <class 'C'>, <class 'A'>, <class 'object'>)
-
-d = D()
-d.method()
-# D.method
-# B.method
-# C.method
-# A.method
-# ← super() 让调用链按 MRO 顺序依次执行！
+# D → B → C → A → object
+D().say()   # D → B → C → A
 ```
 
-**案例3：工业级 —— Mixin 模式（多继承的正确姿势）**
+**案例3（工业级）：Mixin 多继承的正确用法**
 
 ```python
-import json
-import time
-from typing import Any, Dict
+import json, time
 
-# ===== Mixin 类：每个 Mixin 只负责一个功能 =====
+# 每个 Mixin 只做一件事
+class JSONMixin:
+    """混入 JSON 序列化能力"""
+    def to_json(self):
+        return json.dumps(self.__dict__, ensure_ascii=False, indent=2)
 
 class TimestampMixin:
-    """自动添加创建时间和更新时间"""
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if "__init__" not in cls.__dict__:
-            # 如果子类没有定义 __init__，添加一个默认的
-            original_init = cls.__init__
+    """混入时间戳"""
+    def save(self):
+        self.updated_at = time.time()
+        print(f"保存于 {self.updated_at}")
 
-            def new_init(self, *args, **kwargs):
-                self.created_at = time.time()
-                self.updated_at = time.time()
-                if original_init is not object.__init__:
-                    original_init(self, *args, **kwargs)
-
-            cls.__init__ = new_init
-
-
-class JSONSerializableMixin:
-    """让对象可以转为 JSON 字典"""
-    def to_dict(self) -> Dict[str, Any]:
-        """将实例属性转为字典（排除私有属性和方法）"""
-        result = {}
-        for key, value in self.__dict__.items():
-            if not key.startswith("_"):
-                result[key] = value
-        return result
-
-    def to_json(self, indent: int = 2) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent, default=str)
-
-
-class LoggingMixin:
-    """混入日志功能"""
-    def log(self, message: str):
-        print(f"[{type(self).__name__}] {message}")
-
-
-# ===== 业务类：通过多重继承组合功能 =====
-class BlogPost(TimestampMixin, JSONSerializableMixin, LoggingMixin):
-    """博客文章——通过 Mixin 组合了时间戳、JSON 序列化、日志三种功能"""
-
-    def __init__(self, title: str, content: str, author: str):
+# 业务类——通过多继承自由组合功能
+class BlogPost(JSONMixin, TimestampMixin):
+    def __init__(self, title, content):
         self.title = title
         self.content = content
-        self.author = author
-        # TimestampMixin 需要 created_at 和 updated_at
-        if not hasattr(self, "created_at"):
-            self.created_at = time.time()
-            self.updated_at = time.time()
+        self.created_at = time.time()
 
-    def publish(self):
-        self.updated_at = time.time()
-        self.log(f"发布文章: {self.title}")
-        return self.to_json()
-
-
-# 使用
-post = BlogPost("Python 多继承的正确姿势", "Mixin 模式...", "Alice")
-json_str = post.publish()
-print(json_str)
-
-# 功能都是"混"进去的，BlogPost 本身只定义了核心业务逻辑
+post = BlogPost("Python 入门", "Mixin 模式...")
+post.save()
+print(post.to_json())
 ```
 
 ---
 
-## 10.5 抽象基类与协议
+## 10.4 多态——同一个接口，不同的实现
 
-**案例1：抽象基类强制接口实现**
+### 理论：不关心你是谁，只关心你会什么
 
-```python
-from abc import ABC, abstractmethod
+**鸭子类型**（Python 的核心哲学）："如果它走起来像鸭子，叫起来像鸭子，那它就是鸭子"。不检查类型，只检查有没有对应的方法。
 
-class PaymentProcessor(ABC):
-    """支付处理器抽象基类——定义接口契约"""
+---
 
-    @abstractmethod
-    def pay(self, amount: float) -> bool:
-        """支付——子类必须实现"""
-        ...
+### 案例
 
-    @abstractmethod
-    def refund(self, transaction_id: str) -> bool:
-        """退款——子类必须实现"""
-        ...
-
-    def log(self, message: str):
-        """非抽象方法——子类可选覆盖"""
-        print(f"[{type(self).__name__}] {message}")
-
-
-class WeChatPay(PaymentProcessor):
-    def pay(self, amount: float) -> bool:
-        print(f"微信支付: ¥{amount}")
-        return True
-
-    def refund(self, transaction_id: str) -> bool:
-        print(f"微信退款: {transaction_id}")
-        return True
-
-
-class AliPay(PaymentProcessor):
-    def pay(self, amount: float) -> bool:
-        print(f"支付宝支付: ¥{amount}")
-        return True
-
-    def refund(self, transaction_id: str) -> bool:
-        print(f"支付宝退款: {transaction_id}")
-        return True
-
-
-# ❌ 不能实例化抽象类
-# processor = PaymentProcessor()  # TypeError!
-
-# ✅ 子类必须实现所有抽象方法
-wechat = WeChatPay()
-wechat.pay(100.0)
-```
-
-**案例2：鸭子类型与 Protocol（静态鸭子类型）**
+**案例1：鸭子类型——不依赖继承的多态**
 
 ```python
-from typing import Protocol, runtime_checkable
-
-# Python 的鸭子类型传统
-def make_sound_duck(animal):
-    """鸭子类型：不检查类型，只看有没有 speak() 方法"""
-    return animal.speak()
-
-
 class Dog:
     def speak(self):
         return "汪汪"
@@ -652,115 +354,68 @@ class Cat:
     def speak(self):
         return "喵喵"
 
-print(make_sound_duck(Dog()))  # 汪汪
-print(make_sound_duck(Cat()))  # 喵喵
-
-
-# Protocol: 静态鸭子类型（类型检查器可以验证）
-@runtime_checkable
-class Speaker(Protocol):
-    def speak(self) -> str:
-        ...
-
-# 不需要显式继承 Speaker，只要有 speak() 方法就满足协议
 class Duck:
-    def speak(self) -> str:
+    def speak(self):
         return "嘎嘎"
 
-print(isinstance(Duck(), Speaker))  # True！即使 Duck 没有继承 Speaker
+# 这个函数不关心你是什么类型，只关心你有没有 speak()
+def make_sound(animal):
+    return animal.speak()
+
+print(make_sound(Dog()))   # 汪汪
+print(make_sound(Cat()))   # 喵喵
+print(make_sound(Duck()))  # 嘎嘎
 ```
 
-**案例3：工业级 —— 策略模式（多态替代 if-else）**
+**案例2：抽象基类（ABC）——断言"必须实现"**
 
 ```python
-from typing import Dict, Type
 from abc import ABC, abstractmethod
 
-class DiscountStrategy(ABC):
-    """折扣策略抽象基类"""
-
+class PaymentProcessor(ABC):
     @abstractmethod
-    def apply(self, price: float) -> float:
+    def pay(self, amount):
+        """子类必须实现此方法"""
         ...
 
-    @abstractmethod
-    def description(self) -> str:
-        ...
+class WeChatPay(PaymentProcessor):
+    def pay(self, amount):
+        print(f"微信支付 ¥{amount}")
 
+class AliPay(PaymentProcessor):
+    def pay(self, amount):
+        print(f"支付宝支付 ¥{amount}")
+
+# processor = PaymentProcessor()  # TypeError! 不能实例化抽象类
+```
+
+**案例3（工业级）：策略模式——消除 if-elif**
+
+```python
+class DiscountStrategy:
+    def apply(self, price): ...
 
 class NoDiscount(DiscountStrategy):
-    def apply(self, price: float) -> float:
+    def apply(self, price):
         return price
 
-    def description(self) -> str:
-        return "原价"
-
-
-class PercentageDiscount(DiscountStrategy):
-    def __init__(self, percent: float):
+class PercentOff(DiscountStrategy):
+    def __init__(self, percent):
         self.percent = percent
-
-    def apply(self, price: float) -> float:
+    def apply(self, price):
         return price * (1 - self.percent / 100)
 
-    def description(self) -> str:
-        return f"{self.percent}% 折扣"
+# 策略字典替代 if-elif
+strategies = {
+    "原价": NoDiscount(),
+    "八折": PercentOff(20),
+    "半价": PercentOff(50),
+}
 
+def checkout(price, strategy_name):
+    return strategies[strategy_name].apply(price)
 
-class FixedDiscount(DiscountStrategy):
-    def __init__(self, amount: float):
-        self.amount = amount
-
-    def apply(self, price: float) -> float:
-        return max(0, price - self.amount)
-
-    def description(self) -> str:
-        return f"立减 ¥{self.amount}"
-
-
-class BuyOneGetOne(DiscountStrategy):
-    def apply(self, price: float) -> float:
-        return price / 2
-
-    def description(self) -> str:
-        return "买一赠一"
-
-
-# 策略注册表（比 if-elif 链更优雅）
-class DiscountRegistry:
-    _strategies: Dict[str, Type[DiscountStrategy]] = {}
-
-    @classmethod
-    def register(cls, name: str, strategy_cls: Type[DiscountStrategy]):
-        cls._strategies[name] = strategy_cls
-
-    @classmethod
-    def get(cls, name: str, **kwargs) -> DiscountStrategy:
-        if name not in cls._strategies:
-            raise ValueError(f"未知折扣策略: {name}")
-        return cls._strategies[name](**kwargs)
-
-
-# 注册策略
-DiscountRegistry.register("none", NoDiscount)
-DiscountRegistry.register("percent", PercentageDiscount)
-DiscountRegistry.register("fixed", FixedDiscount)
-DiscountRegistry.register("bogo", BuyOneGetOne)
-
-
-# 结账（无需 if-elif）
-def checkout(price: float, discount_name: str, **discount_params):
-    strategy = DiscountRegistry.get(discount_name, **discount_params)
-    final_price = strategy.apply(price)
-    saved = price - final_price
-    print(f"原价: ¥{price:.2f}")
-    print(f"策略: {strategy.description()}")
-    print(f"实付: ¥{final_price:.2f}，省了 ¥{saved:.2f}")
-
-
-checkout(200, "percent", percent=20)  # 原价200，打8折
-checkout(200, "fixed", amount=50)     # 原价200，满减50
-checkout(200, "bogo")                 # 原价200，买一赠一
+print(checkout(200, "八折"))  # 160.0
 ```
 
 ---
@@ -769,15 +424,15 @@ checkout(200, "bogo")                 # 原价200，买一赠一
 
 | 概念 | 一句话 |
 |------|--------|
-| `self` | 谁调用方法，self 就指向谁 |
-| 类属性 vs 实例属性 | 类属性共享（定义在 class 下），实例属性独立（在 __init__ 中用 self.xxx） |
-| `_x` | 约定保护（不强制，但 IDE 警告） |
-| `__x` | 名称改写（变成 `_ClassName__x`） |
-| `@property` | 让方法像属性一样访问（getter/setter/deleter） |
-| `@dataclass` | 自动生成 __init__, __repr__, __eq__ |
-| `__str__` vs `__repr__` | str 给用户看，repr 给开发者看 |
-| `super()` | 按 MRO 顺序找父类 |
-| MRO | 多继承的方法解析顺序（C3 线性化） |
-| ABC | 抽象基类，强制子类实现方法 |
-| Protocol | 静态鸭子类型（不需要继承，有方法就行） |
-| Mixin | 多继承的正确用法（每个 Mixin 只做一件事） |
+| `class` | 定义类 |
+| `__init__` | 构造方法，`obj = Cls(args)` 时调用 |
+| `self` | 自动指向调用方法的实例 |
+| `_x` | 约定"内部使用" |
+| `__x` | 名称改写 `_ClassName__x` |
+| `@property` | 方法变属性（getter/setter） |
+| `@dataclass` | 自动生成样板代码 |
+| `继承` | `class C(P):`，`super()` 调父类 |
+| MRO | 多继承方法查找顺序 |
+| 鸭子类型 | 不检查类型，只关心有没有方法 |
+| ABC | 抽象基类，子类必须实现抽象方法 |
+| Mixin | 一个类只做一件事，多继承组合 |

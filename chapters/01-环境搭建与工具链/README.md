@@ -4,129 +4,49 @@
 
 ## 1.1 Python 解释器
 
-### 知识点：CPython vs PyPy vs Jython
+### 理论：Python 程序是怎么跑起来的？
 
-Python 是一种**语言规范**，有多种解释器实现：
+你写的 `.py` 文件，计算机怎么"读懂"并执行？分三步：
 
-| 解释器 | 特点 | 适用场景 |
-|--------|------|----------|
-| CPython | 官方实现，C 语言编写，生态最全 | 通用开发 |
-| PyPy | JIT 编译，执行速度快 4-5 倍 | 长时间运行的计算密集型任务 |
-| Jython | 跑在 JVM 上，可调用 Java 类库 | 与 Java 生态集成 |
-
-**案例1：查看当前使用的解释器**
-
-```python
-import sys
-import platform
-
-# 查看解释器类型和版本
-print(f"解释器: {sys.implementation.name}")     # 解释器: cpython
-print(f"版本: {sys.version}")                    # 完整版本信息
-print(f"平台: {platform.python_implementation()}")  # CPython
-
-# 查看解释器可执行文件路径
-print(f"解释器路径: {sys.executable}")
+```
+你写的源代码(.py) → 编译成字节码(.pyc) → Python虚拟机逐条执行
+   (人类可读)        (中间表示)            (真正干活)
 ```
 
-**案例2：验证 PyPy 的速度优势（需要在 PyPy 环境下运行）**
+**类比**：你写了一本菜谱（源代码），翻译成厨师能懂的标准化指令（字节码），厨师照着做菜（虚拟机执行）。
 
-```python
-import time
+**CPython** 是官方解释器，用 C 语言写的。此外还有 PyPy（带 JIT 加速器，跑得快）和 Jython（跑在 Java 平台上）。
 
-def fibonacci(n):
-    """纯计算密集型任务"""
-    if n < 2:
-        return n
-    return fibonacci(n - 1) + fibonacci(n - 2)
-
-start = time.perf_counter()
-result = fibonacci(35)
-elapsed = time.perf_counter() - start
-print(f"fibonacci(35) = {result}, 耗时: {elapsed:.2f}s")
-# CPython 约 2-4 秒
-# PyPy 约 0.5-1 秒（JIT 预热后）
-```
-
-**案例3：判断当前解释器类型（兼容性检查）**
-
-```python
-import sys
-import platform
-
-def get_interpreter_info():
-    """工业级：获取解释器完整信息，用于日志和调试"""
-    impl = sys.implementation
-    info = {
-        "name": impl.name,
-        "version": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-        "implementation": platform.python_implementation(),
-        "compiler": platform.python_compiler(),
-        "build_date": platform.python_build()[1],
-        "is_64bit": sys.maxsize > 2**32,
-        "gil_enabled": sys._is_gil_enabled() if hasattr(sys, "_is_gil_enabled") else True,
-    }
-    return info
-
-for key, value in get_interpreter_info().items():
-    print(f"{key}: {value}")
-```
+Python 是**语言规范**，CPython/PyPy/Jython 是这个规范的**不同实现**——就像"汽车"是概念，特斯拉和丰田是不同的实现。
 
 ---
 
-### 知识点：Python 2.x 与 3.x 的核心差异
+### 关键字/命令
 
-**案例1：print 语句 vs 函数**
+| 命令 | 作用 |
+|------|------|
+| `python` | 启动交互式解释器 |
+| `python file.py` | 执行脚本 |
+| `python -c "code"` | 执行一行代码 |
+| `python -m module` | 把模块当做脚本运行 |
 
-```python
-# Python 2:
-# print "hello"          # 语句，不需要括号
-
-# Python 3:
-print("hello")            # 函数，必须加括号
-print("a", "b", "c", sep="|", end=".\n")  # 支持 sep 和 end 参数
-# 输出: a|b|c.
-```
-
-**案例2：整数除法的行为差异**
-
-```python
-# Python 2:
-# 5 / 2   → 2    （整数除法默认截断）
-# 5 // 2  → 2
-# 5 / 2.0 → 2.5
-
-# Python 3:
-print(5 / 2)     # 2.5  （/ 始终返回浮点数）
-print(5 // 2)    # 2    （// 才是整除）
-print(5 / 2.0)   # 2.5
-```
-
-**案例3：Unicode 字符串处理差异**
-
-```python
-# Python 2: str 是 bytes，unicode 是单独的字符串类型
-# Python 3: str 就是 Unicode 字符串
-
-# Python 3 中所有字符串都是 Unicode
-text = "你好，世界"                      # 直接支持中文
-print(len(text))                         # 5 (5个字符，不是字节数)
-print(text.encode("utf-8"))              # b'\xe4\xbd\xa0\xe5\xa5\xbd...'
-print(text.encode("utf-8").decode("utf-8"))  # 还原: 你好，世界
-
-# range 行为也改变了
-r = range(10)
-print(type(r))   # <class 'range'>  —— 可迭代对象，不是列表
-print(list(r))   # [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-```
+`-m` 的意思是：Python 自动在 `sys.path` 中搜索该模块并执行。
 
 ---
 
-### 知识点：解释器的工作原理
+### 案例
 
-Python 代码的执行过程：**源代码 → 字节码(.pyc) → PVM（Python 虚拟机）执行**
+**案例1：查看当前解释器信息**
 
-**案例1：查看字节码**
+```python
+import sys, platform
+
+print(f"版本: {sys.version_info.major}.{sys.version_info.minor}")
+print(f"实现: {platform.python_implementation()}")  # CPython / PyPy
+print(f"路径: {sys.executable}")
+```
+
+**案例2：查看 Python 代码编译后的底层字节码**
 
 ```python
 import dis
@@ -134,451 +54,213 @@ import dis
 def add(a, b):
     return a + b
 
-# 反汇编查看字节码指令
 dis.dis(add)
-# 输出类似:
-#   2 LOAD_FAST    0 (a)
-#   4 LOAD_FAST    1 (b)
-#   6 BINARY_OP    0 (+)
-#  10 RETURN_VALUE
+# LOAD_FAST  (a)     ← 把 a 加载到栈上
+# LOAD_FAST  (b)     ← 把 b 加载到栈上
+# BINARY_OP  (+)     ← 弹出两个值，做加法
+# RETURN_VALUE       ← 返回结果
 ```
 
-**案例2：手动编译和执行字节码**
+**案例3：用 compile/exec 理解"编译和执行是分开的"**
 
 ```python
-import dis
-
-source_code = """
-x = 10
-y = 20
-result = x + y
-"""
-
-# 编译成字节码
-code_object = compile(source_code, "<string>", "exec")
-
-# 查看编译后的字节码
-dis.dis(code_object)
-
-# 执行字节码
-exec(code_object)
-print(result)  # 30
-```
-
-**案例3：工业级——使用 compile 实现安全的表达式求值**
-
-```python
-import ast
-import operator
-
-class SafeEvaluator:
-    """
-    安全的数学表达式求值器。
-    只允许白名单中的操作符和节点类型，防止代码注入。
-    """
-    # 白名单：只允许安全的操作
-    ALLOWED_OPS = {
-        ast.Add: operator.add,
-        ast.Sub: operator.sub,
-        ast.Mult: operator.mul,
-        ast.Div: operator.truediv,
-        ast.Pow: operator.pow,
-        ast.USub: operator.neg,
-    }
-
-    ALLOWED_NODES = (
-        ast.Expression, ast.BinOp, ast.UnaryOp,
-        ast.Constant, ast.Load,
-    )
-
-    @classmethod
-    def evaluate(cls, expression: str) -> float:
-        """安全地对数学表达式求值"""
-        try:
-            tree = ast.parse(expression.strip(), mode="eval")
-        except SyntaxError as e:
-            raise ValueError(f"语法错误: {e}")
-
-        # 校验 AST 节点是否都在白名单中
-        for node in ast.walk(tree):
-            if not isinstance(node, cls.ALLOWED_NODES):
-                raise ValueError(f"不安全的操作: {type(node).__name__}")
-
-        code = compile(tree, "<safe_eval>", "eval")
-        return eval(code, {"__builtins__": {}}, {})
-
-    # 注意：这里的 operator 白名单未直接在 eval 中使用，
-    # 是因为 compile 后的字节码已经绑定了 Python 原生的操作符语义
-
-# 使用
-print(SafeEvaluator.evaluate("3 + 5 * 2"))     # 13.0
-print(SafeEvaluator.evaluate("2 ** 10"))       # 1024.0
+source = "x = 10\ny = 20\nresult = x + y"
+code = compile(source, "<demo>", "exec")  # 编译
+ns = {}
+exec(code, ns)                              # 执行
+print(ns["result"])  # 30
 ```
 
 ---
 
-### 知识点：`python -m` 的用法
+## 1.2 虚拟环境 (venv)
 
-`-m` 参数将一个模块当做脚本来运行，Python 会自动在 `sys.path` 中搜索该模块。
+### 理论：为什么需要虚拟环境？
 
-**案例1：常用模块的 -m 调用**
+项目A 需要 `requests==2.20`，项目B 需要 `requests==2.28`。全局只能装一个版本，冲突了。
+
+**虚拟环境 = 给每个项目一个独立的"包安装空间"**，互不干扰。
+
+类比：
+- 全局环境 = 公共图书馆（谁都在里面放书，容易乱）
+- 虚拟环境 = 每个项目自带独立小书架
+
+虚拟环境**不是完整复制 Python**，只是创建一个隔离目录，里面有独立的 `site-packages`。
+
+---
+
+### 关键字/命令
 
 ```bash
-# 启动 HTTP 服务器（当前目录作为静态文件服务器）
-python -m http.server 8000
-
-# JSON 格式化工具
-echo '{"name":"Alice","age":30}' | python -m json.tool
-
-# 查看 pip 版本
-python -m pip --version
-
-# 代码检查（需要安装 flake8）
-python -m flake8 my_script.py
+python -m venv .venv             # 创建
+source .venv/bin/activate        # 激活 (macOS/Linux)
+.venv\Scripts\activate           # 激活 (Windows)
+deactivate                       # 退出
 ```
 
-**案例2：理解 -m 对 sys.path 的影响**
+检测是否在虚拟环境中：
 
 ```python
-# 文件: demo_module.py
 import sys
-
-if __name__ == "__main__":
-    print("作为脚本直接运行")
-    print(f"sys.path[0] = {sys.path[0]}")
-
-# 运行方式:
-# python demo_module.py          → sys.path[0] 是文件所在目录
-# python -m demo_module          → sys.path[0] 是当前工作目录
-```
-
-**案例3：工业级——用 -m 统一项目入口，避免导入路径问题**
-
-```python
-# 项目结构:
-# myproject/
-#   __init__.py
-#   cli.py       ← 命令行入口
-#   core/
-#     __init__.py
-#     engine.py
-
-# cli.py 中:
-import argparse
-from .core.engine import run
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", required=True)
-    args = parser.parse_args()
-    run(args.config)
-
-if __name__ == "__main__":
-    main()
-
-# 运行方式:
-# cd myproject/..
-# python -m myproject.cli --config config.yaml  ← 正确
-# python myproject/cli.py --config config.yaml  ← 相对导入会失败
+print(sys.prefix != sys.base_prefix)  # True = 在虚拟环境中
 ```
 
 ---
 
-## 1.2 环境管理
+### 案例
 
-### 知识点：pip 包管理
-
-**案例1：pip 基础操作**
+**案例1：完整流程**
 
 ```bash
-# 安装包
-pip install requests
-
-# 安装指定版本
-pip install requests==2.28.0
-
-# 卸载包
-pip uninstall requests -y
-
-# 列出已安装的包
-pip list
-
-# 导出当前环境的依赖
+python -m venv .venv
+source .venv/bin/activate
+which python                   # 应指向 .venv/bin/python
+pip install requests pandas
 pip freeze > requirements.txt
-
-# 从文件安装依赖
-pip install -r requirements.txt
-
-# 查看包的详细信息
-pip show requests
-```
-
-**案例2：pip 的依赖冲突检测**
-
-```bash
-# 检查依赖兼容性
-pip check
-
-# 安装时查看将要安装的依赖
-pip install --dry-run pandas
-
-# 列出过期的包
-pip list --outdated
-
-# 查看包的依赖树（需要 pip install pipdeptree）
-pipdeptree
-```
-
-**案例3：工业级——锁定依赖版本的策略**
-
-```bash
-# 1. 开发阶段：记录宽松依赖
-cat > setup.cfg << 'EOF'
-[options]
-install_requires =
-    requests>=2.28,<3.0
-    numpy>=1.24,<2.0
-    pandas>=2.0,<3.0
-EOF
-
-# 2. 发布前：锁定精确版本
-pip freeze > requirements-lock.txt
-
-# 3. 生产部署：只安装锁定版本
-pip install -r requirements-lock.txt
-
-# 4. 安全审计：检查已知漏洞
-pip install safety
-safety check
-```
-
----
-
-### 知识点：虚拟环境 (venv)
-
-**案例1：虚拟环境的创建和使用**
-
-```bash
-# 创建虚拟环境
-python -m venv myproject_env
-
-# 激活（macOS/Linux）
-source myproject_env/bin/activate
-
-# 激活（Windows）
-# myproject_env\Scripts\activate
-
-# 此时 prompt 前会出现 (myproject_env)
-# 现在 pip install 的任何包只会装在这个环境中
-
-# 退出虚拟环境
 deactivate
 ```
 
-**案例2：用脚本验证虚拟环境隔离性**
-
-```python
-import sys
-import site
-
-def check_environment():
-    """检查当前 Python 环境的隔离状态"""
-    print(f"Python 路径: {sys.executable}")
-    print(f"是否是虚拟环境: {sys.prefix != sys.base_prefix}")
-    print(f"site-packages 路径: {site.getsitepackages()}")
-
-    # 如果是虚拟环境，site-packages 在 env/ 目录下
-    # 如果是全局环境，site-packages 在系统路径下
-
-check_environment()
-```
-
-**案例3：工业级——项目的环境初始化脚本**
+**案例2：在新环境一键复现依赖**
 
 ```bash
-#!/bin/bash
-# 文件: setup_env.sh —— 一键初始化开发环境
+pip install -r requirements.txt
+```
 
-set -e
+**案例3：pip 常用命令**
 
-PROJECT_NAME="myproject"
-PYTHON_VERSION="3.11"
-
-echo "=== 创建虚拟环境 ==="
-python${PYTHON_VERSION} -m venv .venv
-
-echo "=== 激活虚拟环境 ==="
-source .venv/bin/activate
-
-echo "=== 升级 pip ==="
-pip install --upgrade pip setuptools wheel
-
-echo "=== 安装开发依赖 ==="
-pip install -e ".[dev,test]"
-
-echo "=== 安装 pre-commit hooks ==="
-pre-commit install
-
-echo "=== 环境初始化完成 ==="
-echo "运行: source .venv/bin/activate"
+```bash
+pip install pkg==1.2.3      # 装指定版本
+pip install "pkg>=2.0,<3.0" # 版本范围
+pip list --outdated         # 哪些包有新版本
+pip show pkg                # 包详细信息
+pip check                   # 依赖冲突检查
 ```
 
 ---
 
-## 1.3 开发工具
+## 1.3 调试器 (pdb)
 
-### 知识点：调试器
+### 理论：调试器是"时间暂停器"
 
-**案例1：pdb 命令行调试**
+程序跑得飞快，出 bug 时你来不及看清楚发生了什么。pdb 让程序在任意一行**暂停**，你可以检查所有变量的值，然后一行一行地执行。
 
-```python
-import pdb
+---
 
-def calculate_average(numbers):
-    total = sum(numbers)
-    count = len(numbers)
-    pdb.set_trace()        # ← 程序在此处暂停，进入调试模式
-    # 常用命令: n(下一行), s(步入), c(继续), p var(打印变量), l(查看代码)
-    return total / count
-
-result = calculate_average([10, 20, 30, 40])
-print(result)
-```
-
-**案例2：breakpoint() 断点调试（Python 3.7+）**
+### 关键字/命令
 
 ```python
-def process_data(items):
-    results = []
-    for i, item in enumerate(items):
-        processed = item * 2
-        if processed > 100:
-            # Python 3.7+ 推荐的断点方式，比 pdb.set_trace() 更简洁
-            breakpoint()  # 等同于 pdb.set_trace()
-        results.append(processed)
-    return results
-
-data = [10, 30, 60, 80]
-output = process_data(data)
-print(output)
+breakpoint()  # Python 3.7+ 推荐的断点（程序在此暂停）
 ```
 
-**案例3：工业级——通过环境变量控制调试行为**
+进入 pdb 后最常用的 5 个命令：
+
+| 命令 | 全称 | 作用 |
+|------|------|------|
+| `n` | next | 执行下一行 |
+| `s` | step | 步入函数内部 |
+| `c` | continue | 继续执行到下一个断点 |
+| `p 变量` | print | 打印变量值 |
+| `q` | quit | 退出 |
+
+---
+
+### 案例
+
+**案例1：用 breakpoint() 调试**
+
+```python
+def calculate(a, b):
+    result = a * b
+    breakpoint()          # 此处暂停，可输入 p a, p b, n...
+    return result / 2
+
+calculate(10, 5)
+```
+
+**案例2：条件断点——只在特定条件下暂停**
+
+```python
+for i in range(100):
+    if i == 50:
+        breakpoint()       # 只在 i==50 时暂停
+    print(i)
+```
+
+**案例3：生产环境安全——按环境变量决定是否调试**
 
 ```python
 import os
-import sys
 
 def debug_hook():
-    """
-    根据环境变量决定调试行为。
-    生产环境不会误触断点。
-    """
-    debug_mode = os.getenv("DEBUG", "0")
-
-    if debug_mode == "1":
-        # 开发环境：进入标准 pdb
-        import pdb; pdb.set_trace()
-    elif debug_mode == "pudb":
-        # 开发环境：使用更友好的 pudb（需安装）
-        import pudb; pudb.set_trace()
-    elif debug_mode == "ipdb":
-        # 开发环境：使用 ipdb（需安装）
-        import ipdb; ipdb.set_trace()
-    # 生产环境：debug_mode=0，什么都不做
+    if os.getenv("DEBUG") == "1":
+        breakpoint()       # 只有设置了 DEBUG=1 才会暂停
+    # 生产环境不设这个变量，断点自动跳过
 
 def critical_operation(data):
-    """关键业务函数"""
-    debug_hook()  # 只在 DEBUG=1 时才会暂停
-    # ... 正常业务逻辑 ...
+    debug_hook()
     return data * 2
-
-print(critical_operation(10))
 ```
 
 ---
 
-### 知识点：代码格式化
+## 1.4 代码质量工具
+
+### 理论：格式化 vs 检查 vs 类型检查
+
+| 工具 | 做什么 | 类比 |
+|------|--------|------|
+| black/ruff format | 统一代码格式（缩进、引号、换行） | 自动排版 |
+| ruff check | 找出潜在 bug 和不良写法 | 语法校对 |
+| mypy | 检查类型标注是否正确 | 类型审查 |
+
+---
+
+### 案例
 
 **案例1：black 自动格式化**
 
-```python
-# 格式化前的代码（故意写乱）:
-def foo(  x,y  ):
-    return    x+y*  2
-
-result=[foo(i,i+1)for i in range(10)]
-
-# 运行: black script.py
-# 格式化后:
-def foo(x, y):
-    return x + y * 2
-
-
-result = [foo(i, i + 1) for i in range(10)]
+```bash
+pip install black
+black .                        # 格式化整个目录
+black --check .                # 只检查不修改（CI 中用）
 ```
 
-**案例2：ruff 一站式代码检查与修复**
+**案例2：ruff 一站式检查 + 修复**
 
 ```bash
-# 安装
 pip install ruff
-
-# 检查代码问题
-ruff check .
-
-# 自动修复能修复的问题
-ruff check --fix .
-
-# 同时检查和格式化
-ruff format .
-
-# 在 CI 中使用（严格模式）
-ruff check --select=E,F,I,N,W --ignore=E501 .
+ruff check .                   # 检查问题
+ruff check --fix .             # 自动修复
+ruff format .                  # 格式化
 ```
 
-**案例3：工业级——pyproject.toml 中统一配置格式化工具**
+**案例3：pyproject.toml 统一配置**
 
 ```toml
-# pyproject.toml
 [tool.black]
 line-length = 100
-target-version = ["py311"]
 
 [tool.ruff]
 line-length = 100
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # Pyflakes
-    "I",   # isort
-    "N",   # pep8-naming
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-]
-
-[tool.ruff.per-file-ignores]
-"__init__.py" = ["F401"]   # 允许未使用的导入
+select = ["E", "W", "F", "I", "B", "UP"]
 
 [tool.mypy]
 python_version = "3.11"
 strict = true
-warn_return_any = true
-warn_unused_configs = true
 ```
 
 ---
 
 ## 本章速查
 
-| 命令 | 作用 |
-|------|------|
-| `python --version` | 查看 Python 版本 |
+| 命令 | 做什么 |
+|------|--------|
+| `python --version` | 查看版本 |
 | `python -m venv .venv` | 创建虚拟环境 |
-| `source .venv/bin/activate` | 激活虚拟环境 (macOS/Linux) |
-| `pip install <pkg>` | 安装包 |
+| `source .venv/bin/activate` | 激活 |
+| `deactivate` | 退出 |
+| `pip install pkg` | 安装包 |
 | `pip freeze > requirements.txt` | 导出依赖 |
-| `python -m pdb script.py` | 命令行调试 |
+| `breakpoint()` | 设断点 |
 | `black .` | 格式化代码 |
 | `ruff check .` | 代码检查 |

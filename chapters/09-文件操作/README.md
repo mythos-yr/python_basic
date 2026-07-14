@@ -4,592 +4,258 @@
 
 ## 9.1 文件读写基础
 
-### 知识点：打开模式与编码
+### 理论：Python 如何与外部文件交互
 
-**案例1：各种打开模式的含义和差异**
+Python 通过 `open()` 函数打开文件，返回一个**文件对象**。文件对象是一个迭代器，可以逐行读取。
 
-```python
-# 文件打开模式速查:
-# r  - 只读（文件必须存在）
-# w  - 只写（文件存在则清空，不存在则创建）
-# a  - 追加（文件存在则在末尾追加，不存在则创建）
-# x  - 排他创建（文件已存在则报错）
-# b  - 二进制模式（配合 r/w/a）
-# t  - 文本模式（默认）
-# +  - 读写同时
+**打开模式理解**：第二个参数决定了"怎么用这个文件"。
 
-# r vs w vs a 的演示
-import os
+| 模式 | 含义 | 能读？ | 能写？ | 文件不存在？ | 文件存在？ |
+|------|------|--------|--------|-------------|-----------|
+| `r` | 只读 | ✅ | ❌ | 报错 | 从开头读 |
+| `w` | 只写 | ❌ | ✅ | 创建 | **清空并重写** |
+| `a` | 追加 | ❌ | ✅ | 创建 | 从末尾追加 |
+| `x` | 排他创建 | ❌ | ✅ | 创建 | **报错** |
+| `r+` | 读写 | ✅ | ✅ | 报错 | 从开头 |
 
-# 准备测试文件
-with open("demo.txt", "w", encoding="utf-8") as f:
-    f.write("第一行\n第二行\n")
+**`b` 和 `t`**：`b` = 二进制（如图片），`t` = 文本（默认，自动处理编码）。
 
-# r: 只读（文件不存在报错）
-with open("demo.txt", "r", encoding="utf-8") as f:
-    content = f.read()
-    print(f"r 模式读取: {repr(content)}")
+**为什么用 `with`？** 保证文件无论是否出错都会被正确关闭，防止文件句柄泄漏。
 
-# a: 追加（不清空原有内容）
-with open("demo.txt", "a", encoding="utf-8") as f:
-    f.write("第三行\n")
-# 文件内容变为: 第一行\n第二行\n第三行\n
+---
 
-# x: 排他创建
-try:
-    with open("demo.txt", "x") as f:   # 文件已存在，报错
-        f.write("...")
-except FileExistsError as e:
-    print(f"x 模式报错: {e}")
-
-os.remove("demo.txt")
-```
-
-**案例2：读文件的多种方式**
+### 关键字/语法
 
 ```python
-# 创建一个测试文件
-with open("sample.txt", "w", encoding="utf-8") as f:
-    f.write("line1\nline2\nline3\nline4\nline5\n")
-
-# 方式1: read() —— 一次性读入整个文件（小心大文件！）
-with open("sample.txt", "r", encoding="utf-8") as f:
-    all_text = f.read()
-
-# 方式2: readline() —— 逐行读取
-with open("sample.txt", "r", encoding="utf-8") as f:
-    first_line = f.readline().strip()
-    second_line = f.readline().strip()
-    print(f"第1行: {first_line}, 第2行: {second_line}")
-
-# 方式3: readlines() —— 所有行读入列表（内存中）
-with open("sample.txt", "r", encoding="utf-8") as f:
-    lines = f.readlines()   # ['line1\n', 'line2\n', ...]
-
-# 方式4: 直接迭代文件对象（推荐——惰性逐行读取）
-with open("sample.txt", "r", encoding="utf-8") as f:
-    for line in f:
-        print(line.strip())  # 每次只在内存中保持一行
-
-import os; os.remove("sample.txt")
-```
-
-**案例3：工业级 —— 大文件的安全处理**
-
-```python
-import os
-import hashlib
-from typing import Iterator, Optional
-
-class LargeFileProcessor:
-    """
-    大文件安全处理器。
-    核心原则：永远不要一次读入整个大文件。
-    """
-
-    CHUNK_SIZE = 64 * 1024  # 64KB 一块
-
-    @classmethod
-    def safe_read_lines(cls, path: str, encoding: str = "utf-8") -> Iterator[str]:
-        """
-        安全逐行读取大文件。
-        即使文件有几十 GB，内存使用也恒定。
-        """
-        with open(path, "r", encoding=encoding, errors="replace") as f:
-            for line_num, line in enumerate(f, 1):
-                try:
-                    yield line.strip()
-                except Exception as e:
-                    print(f"警告: 第 {line_num} 行解析失败: {e}")
-
-    @classmethod
-    def compute_md5(cls, path: str) -> str:
-        """
-        分块计算大文件的 MD5。
-        不管文件多大，每次只在内存中保持 64KB。
-        """
-        md5 = hashlib.md5()
-        with open(path, "rb") as f:   # 二进制模式
-            while chunk := f.read(cls.CHUNK_SIZE):
-                md5.update(chunk)
-        return md5.hexdigest()
-
-    @classmethod
-    def count_lines_fast(cls, path: str) -> int:
-        """
-        快速统计大文件行数（不解析内容）。
-        利用文件对象的迭代器特性。
-        """
-        with open(path, "rb") as f:
-            return sum(1 for _ in f)
-
-    @classmethod
-    def tail(cls, path: str, n: int = 10) -> str:
-        """
-        获取文件最后 N 行（类似 Unix tail）。
-        从文件末尾反向读取，不加载整个文件。
-        """
-        with open(path, "rb") as f:
-            # 从文件末尾向前搜索换行符
-            f.seek(0, os.SEEK_END)
-            file_size = f.tell()
-            buffer_size = 8192
-            lines_found = 0
-            block_num = -1
-            data_parts = []
-
-            while lines_found <= n and file_size + block_num * buffer_size > 0:
-                seek_pos = max(0, file_size + (block_num - 1) * buffer_size)
-                read_size = min(buffer_size, file_size + block_num * buffer_size - seek_pos)
-                f.seek(max(0, seek_pos))
-                data = f.read(read_size or buffer_size)
-                data_parts.insert(0, data)
-                lines_found += data.count(b"\n")
-                block_num -= 1
-
-            all_data = b"".join(data_parts)
-            lines = all_data.split(b"\n")
-            return b"\n".join(lines[-n:]).decode("utf-8", errors="replace")
+with open("文件路径", "模式", encoding="utf-8") as f:
+    content = f.read()                    # 读全部
+    line = f.readline()                   # 读一行
+    lines = f.readlines()                 # 读所有行（返回列表）
+    for line in f:                        # 逐行迭代（推荐——省内存）
+        pass
+    f.write("字符串")                      # 写文本
 ```
 
 ---
 
-## 9.2 文件操作进阶
+### 案例
 
-### 知识点：pathlib —— 现代路径操作
+**案例1：四种读文件的方式对比**
+
+```python
+# read() —— 一次性全读（小文件用）
+with open("file.txt", "r", encoding="utf-8") as f:
+    all_text = f.read()
+
+# readline() —— 逐行手动读
+with open("file.txt", "r", encoding="utf-8") as f:
+    while (line := f.readline()):
+        print(line.strip())
+
+# readlines() —— 所有行读进列表（中等文件用）
+with open("file.txt", "r", encoding="utf-8") as f:
+    lines = f.readlines()
+
+# 直接迭代文件对象 —— 惰性逐行读（大文件首选）
+with open("file.txt", "r", encoding="utf-8") as f:
+    for line in f:
+        print(line.strip())
+```
+
+**案例2：追加写 vs 覆盖写**
+
+```python
+# w 模式：每次打开都清空文件
+with open("log.txt", "w") as f:
+    f.write("第一行\n")
+
+with open("log.txt", "w") as f:
+    f.write("这也成了第一行\n")   # 之前的内容被清空了
+
+# a 模式：每次在末尾追加
+with open("log.txt", "a") as f:
+    f.write("追加的一行\n")       # 内容不会被覆盖
+```
+
+**案例3（工业级）：分块计算大文件的 MD5**
+
+```python
+import hashlib
+
+def file_md5(path: str, chunk_size: int = 64 * 1024) -> str:
+    """计算文件 MD5，每次只读 64KB——多大的文件都不怕"""
+    md5 = hashlib.md5()
+    with open(path, "rb") as f:
+        while chunk := f.read(chunk_size):
+            md5.update(chunk)
+    return md5.hexdigest()
+```
+
+---
+
+## 9.2 pathlib —— 现代路径操作
+
+### 理论：告别 os.path，拥抱 pathlib
+
+`pathlib` 是 Python 3.4+ 引入的**面向对象的路径处理库**。相比字符串操作的 `os.path`，`pathlib.Path` 更直观、更不容易出错。
+
+**`/` 运算符**：Path 对象可以用 `/` 拼接路径，这是 Python 唯一重载了 `/` 运算符的标准库。
+
+---
+
+### 关键字/语法
+
+```python
+from pathlib import Path
+
+Path("dir") / "subdir" / "file.txt"   # 路径拼接
+
+p = Path("some_file.txt")
+p.exists()         # 是否存在
+p.is_file()        # 是否是文件
+p.is_dir()         # 是否是目录
+p.name             # 文件名 (含后缀)
+p.stem             # 文件名 (不含后缀)
+p.suffix           # 后缀 (.txt, .py)
+p.parent           # 父目录
+p.read_text()      # 读文本
+p.write_text("..") # 写文本
+p.glob("*.py")     # 匹配文件（返回迭代器）
+p.rglob("*.py")    # 递归匹配
+p.mkdir(parents=True, exist_ok=True)  # 递归创建目录
+```
+
+---
+
+### 案例
 
 **案例1：pathlib vs os.path 对比**
 
 ```python
-from pathlib import Path
-
-# 创建路径对象
-p = Path("/usr/local/bin/python3")
-
-# os.path 风格（旧式，不推荐）
+# os.path 风格（旧式）
 import os
 print(os.path.basename("/usr/local/bin/python3"))  # python3
-print(os.path.dirname("/usr/local/bin/python3"))   # /usr/local/bin
-print(os.path.splitext("file.txt"))                # ('file', '.txt')
 print(os.path.join("dir", "subdir", "file.txt"))   # dir/subdir/file.txt
 
-# pathlib 风格（现代，推荐）
-print(p.name)           # python3
-print(p.parent)         # /usr/local/bin
-print(p.suffix)         # （无后缀）
-print(Path("dir") / "subdir" / "file.txt")  # dir/subdir/file.txt（/ 运算符合并路径）
-
-# 路径是否存在
-# Path("some_file.txt").exists()
-
-# 遍历目录
-# for py_file in Path(".").glob("*.py"):
-#     print(py_file)
-
-# 递归遍历
-# for py_file in Path(".").rglob("*.py"):
-#     print(py_file)
+# pathlib 风格（推荐）
+from pathlib import Path
+p = Path("/usr/local/bin/python3")
+print(p.name)                                        # python3
+print(Path("dir") / "subdir" / "file.txt")           # dir/subdir/file.txt
 ```
 
-**案例2：pathlib 的文件操作**
+**案例2：遍历目录下所有 .py 文件**
 
 ```python
 from pathlib import Path
 
-# 读写文件（pathlib 自带方法）
-p = Path("test_pathlib.txt")
-p.write_text("Hello, pathlib!", encoding="utf-8")
-content = p.read_text(encoding="utf-8")
-print(content)  # Hello, pathlib!
+# 只当前目录
+for f in Path(".").glob("*.py"):
+    print(f)
 
-# 二进制读写
-# p.write_bytes(b"binary data")
-# data = p.read_bytes()
-
-# 文件信息
-print(f"文件名: {p.name}")
-print(f"后缀: {p.suffix}")
-print(f"父目录: {p.parent}")
-print(f"绝对路径: {p.resolve()}")
-print(f"是文件: {p.is_file()}")
-print(f"是目录: {p.is_dir()}")
-
-# 创建和删除
-p.unlink(missing_ok=True)  # 删除文件（不存在也不报错）
-
-# 创建目录
-new_dir = Path("test_dir/subdir")
-new_dir.mkdir(parents=True, exist_ok=True)  # 递归创建，存在也不报错
-new_dir.rmdir()  # 删除空目录
-Path("test_dir").rmdir()
+# 递归遍历所有子目录
+for f in Path(".").rglob("*.py"):
+    print(f)
 ```
 
-**案例3：工业级 —— 文件同步工具（差异检测）**
+**案例3：文件差异检测——比较两个目录**
 
 ```python
 import hashlib
 from pathlib import Path
-from typing import Dict, Set, Tuple
 
-class FileSyncChecker:
-    """
-    文件差异检测器——比较两个目录的异同。
-    基于文件内容的 MD5（而非修改时间），更可靠。
-    """
+def dir_hash(directory: str) -> dict:
+    """扫描目录，返回 {文件路径: MD5}"""
+    result = {}
+    for f in Path(directory).rglob("*"):
+        if f.is_file():
+            with open(f, "rb") as fh:
+                result[str(f)] = hashlib.md5(fh.read()).hexdigest()
+    return result
 
-    @staticmethod
-    def hash_file(filepath: Path) -> str:
-        """计算文件的 MD5 哈希"""
-        md5 = hashlib.md5()
-        with open(filepath, "rb") as f:
-            while chunk := f.read(65536):
-                md5.update(chunk)
-        return md5.hexdigest()
-
-    @classmethod
-    def scan_directory(cls, root: str) -> Dict[str, str]:
-        """
-        扫描目录下所有文件，返回 {相对路径: MD5哈希}。
-        """
-        root_path = Path(root)
-        file_hashes = {}
-
-        for filepath in root_path.rglob("*"):
-            if filepath.is_file() and not filepath.name.startswith("."):
-                relative = filepath.relative_to(root_path)
-                file_hashes[str(relative)] = cls.hash_file(filepath)
-
-        return file_hashes
-
-    @classmethod
-    def compare(cls, source: str, target: str) -> Dict[str, list]:
-        """
-        比较两个目录。
-        返回: {"added": [...], "modified": [...], "deleted": [...], "unchanged": [...]}
-        """
-        source_files = cls.scan_directory(source)
-        target_files = cls.scan_directory(target)
-
-        source_keys = set(source_files.keys())
-        target_keys = set(target_files.keys())
-
-        result = {
-            "added": [],       # 源有目标无 → 新增
-            "deleted": [],     # 目标有源无 → 需删除
-            "modified": [],    # 两边都有但 MD5 不同 → 修改
-            "unchanged": [],   # MD5 相同 → 未变化
-        }
-
-        for path in source_keys - target_keys:
-            result["added"].append(path)
-
-        for path in target_keys - source_keys:
-            result["deleted"].append(path)
-
-        for path in source_keys & target_keys:
-            if source_files[path] != target_files[path]:
-                result["modified"].append(path)
-            else:
-                result["unchanged"].append(path)
-
-        return result
-
-
-# 使用
-# checker = FileSyncChecker()
-# diff = checker.compare("./dir_v1", "./dir_v2")
-# for category, files in diff.items():
-#     print(f"\n{category}: {len(files)} 个文件")
-#     for f in files[:5]:
-#         print(f"  {f}")
+# 比较两个目录哪些文件变了
+# old_files = dir_hash("/backup/v1")
+# new_files = dir_hash("/backup/v2")
+# for path in set(new_files) - set(old_files):
+#     print(f"新增: {path}")
 ```
 
 ---
 
-## 9.3 JSON 与 CSV
+## 9.3 JSON 处理
 
-### 知识点：JSON 序列化
+### 理论：JSON 是数据交换的通用语言
 
-**案例1：json 的四个核心方法**
+JSON（JavaScript Object Notation）是前后端通信的标准格式。Python 的 `json` 模块提供 4 个核心函数：
+
+| 函数 | 方向 | 输入 → 输出 |
+|------|------|------------|
+| `json.dumps(obj)` | Python → 字符串 | dict → str |
+| `json.loads(s)` | 字符串 → Python | str → dict |
+| `json.dump(obj, f)` | Python → 文件 | dict → file |
+| `json.load(f)` | 文件 → Python | file → dict |
+
+**记忆技巧**：带 `s` 的是字符串（string）操作，不带 `s` 的是文件操作。
+
+---
+
+### 案例
+
+**案例1：四个核心方法**
 
 ```python
 import json
 
-data = {
-    "name": "Alice",
-    "age": 30,
-    "tags": ["python", "dev"],
-    "metadata": {"role": "admin"}
-}
+data = {"name": "Alice", "age": 30}
 
-# json.dumps: Python对象 → JSON字符串
-json_str = json.dumps(data, indent=2, ensure_ascii=False)
-print(f"dumps: {json_str}")
+# Python → JSON 字符串
+s = json.dumps(data, indent=2, ensure_ascii=False)
 
-# json.loads: JSON字符串 → Python对象
-parsed = json.loads(json_str)
-print(f"loads: {parsed}")
+# JSON 字符串 → Python
+parsed = json.loads(s)
 
-# json.dump: Python对象 → 文件（直接写文件）
-with open("data.json", "w", encoding="utf-8") as f:
+# Python → JSON 文件
+with open("data.json", "w") as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
 
-# json.load: 文件 → Python对象
-with open("data.json", "r", encoding="utf-8") as f:
+# JSON 文件 → Python
+with open("data.json") as f:
     loaded = json.load(f)
-print(f"load: {loaded}")
-
-import os; os.remove("data.json")
 ```
 
-**案例2：JSON 高级——自定义序列化器**
+**案例2：自定义 JSON 序列化器——处理 datetime**
 
 ```python
 import json
-from datetime import datetime, date
-from decimal import Decimal
+from datetime import datetime
 
-class EnhancedJSONEncoder(json.JSONEncoder):
-    """处理 Python 特有的类型：datetime、Decimal 等"""
-
+class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, (datetime, date)):
+        if isinstance(obj, datetime):
             return obj.isoformat()
-        if isinstance(obj, Decimal):
-            return float(obj)
-        if isinstance(obj, set):
-            return list(obj)
-        # 让父类处理未知类型（抛 TypeError）
-        return super().default(obj)
+        return super().default(obj)  # 未知类型交给父类抛异常
 
-
-# 使用自定义编码器
-data_with_special = {
-    "created_at": datetime.now(),
-    "price": Decimal("19.99"),
-    "tags": {"python", "json"},
-}
-
-json_str = json.dumps(data_with_special, cls=EnhancedJSONEncoder, indent=2)
-print(json_str)
+data = {"created_at": datetime.now()}
+print(json.dumps(data, cls=CustomEncoder))
 ```
 
-**案例3：工业级 —— 配置文件管理（JSON + 环境变量覆盖）**
+**案例3（工业级）：环境变量覆盖 JSON 配置**
 
 ```python
 import json
 import os
-from pathlib import Path
-from typing import Any, Dict, Optional
 
-class ConfigManager:
-    """
-    配置管理器。加载 JSON 配置文件，允许环境变量覆盖。
-    环境变量优先级 > JSON 配置 > 默认值。
-    """
+def load_config(path: str) -> dict:
+    """加载 JSON 配置，允许环境变量覆盖"""
+    with open(path) as f:
+        config = json.load(f)
 
-    def __init__(self, config_path: Optional[str] = None):
-        self._config: Dict[str, Any] = {}
-        if config_path and Path(config_path).exists():
-            self.load_json(config_path)
-
-    def load_json(self, path: str) -> "ConfigManager":
-        """加载 JSON 配置文件"""
-        with open(path, "r", encoding="utf-8") as f:
-            self._config = json.load(f)
-        return self
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """
-        获取配置。优先级: 环境变量 > JSON > default。
-        环境变量用前缀 APP_，如 APP_DB_HOST。
-        """
-        # 1. 先检查环境变量
-        env_key = f"APP_{key.upper()}"
-        env_value = os.getenv(env_key)
-        if env_value is not None:
-            return self._cast_type(env_value, default)
-
-        # 2. 检查 JSON 配置（支持嵌套加点号访问）
-        value = self._config
-        for part in key.split("."):
-            if isinstance(value, dict):
-                value = value.get(part)
-            else:
-                return default
-        return value if value is not None else default
-
-    @staticmethod
-    def _cast_type(value: str, default: Any) -> Any:
-        """将环境变量字符串转为合适的类型"""
-        if isinstance(default, bool):
-            return value.lower() in ("true", "1", "yes")
-        if isinstance(default, int):
-            return int(value)
-        if isinstance(default, float):
-            return float(value)
-        if isinstance(default, list):
-            return json.loads(value)  # JSON 数组格式
-        return value
-
-
-# 使用演示
-# 假设 config.json 内容:
-# {"db": {"host": "localhost", "port": 5432}, "debug": false}
-
-# config = ConfigManager("config.json")
-# db_host = config.get("db.host")              # 来自 JSON
-# db_port = config.get("db.port", 5432)        # 来自 JSON
-# debug = config.get("debug", False)           # 来自 JSON，false
-
-# 如果设置了环境变量:
-# export APP_DB_HOST=prod.example.com
-# db_host = config.get("db.host")  # 现在返回 "prod.example.com"
-```
-
----
-
-## 9.4 CSV 处理
-
-**案例1：CSV 读写基础**
-
-```python
-import csv
-from pathlib import Path
-
-# 写入 CSV
-with open("users.csv", "w", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow(["name", "age", "city"])         # 写表头
-    writer.writerow(["Alice", 30, "Beijing"])         # 写数据行
-    writer.writerows([                                # 批量写入
-        ["Bob", 25, "Shanghai"],
-        ["Charlie", 35, "Shenzhen"],
-    ])
-
-# 读取 CSV
-with open("users.csv", "r", encoding="utf-8") as f:
-    reader = csv.reader(f)
-    for row in reader:
-        print(row)
-
-# DictReader/Writer: 用字典操作（更语义化）
-with open("users.csv", "r", encoding="utf-8") as f:
-    reader = csv.DictReader(f)
-    for row in reader:
-        print(f"{row['name']}, {row['age']}岁, 来自{row['city']}")
-
-import os; os.remove("users.csv")
-```
-
-**案例2：CSV 的常见坑——字段中的逗号和换行**
-
-```python
-import csv
-import io
-
-# CSV 中的特殊值：字段含逗号、引号、换行
-data = [
-    {"name": "Smith, John", "note": 'He said "hello"'},            # 逗号和引号
-    {"name": "Jane Doe", "note": "第一行\n第二行"},                 # 换行
-    {"name": "Bob", "note": "simple,csv,values"},                  # 逗号
-]
-
-# DictWriter 自动处理转义
-output = io.StringIO()
-writer = csv.DictWriter(output, fieldnames=["name", "note"])
-writer.writeheader()
-writer.writerows(data)
-
-print("CSV 输出:")
-print(output.getvalue())
-# 可以看到字段内的逗号和换行被自动加引号包围并转义
-```
-
-**案例3：工业级 —— 大数据 CSV 的流式处理**
-
-```python
-import csv
-from typing import Iterator, Dict, List, Optional
-from pathlib import Path
-
-class CSVStreamProcessor:
-    """
-    流式 CSV 处理器。
-    对大 CSV 文件（几个 GB）逐行处理，不加载全量到内存。
-    """
-
-    @staticmethod
-    def stream_read(filepath: str, encoding: str = "utf-8") -> Iterator[Dict[str, str]]:
-        """
-        流式读取 CSV 文件，逐行产出字典。
-        """
-        with open(filepath, "r", encoding=encoding) as f:
-            reader = csv.DictReader(f)
-
-            # 校验表头
-            if not reader.fieldnames:
-                raise ValueError(f"CSV 文件 {filepath} 缺少表头")
-
-            for row_num, row in enumerate(reader, start=2):  # 从第2行开始（第1行是表头）
-                try:
-                    yield row
-                except Exception as e:
-                    print(f"警告: 第 {row_num} 行解析失败: {e}")
-
-    @staticmethod
-    def filter_and_transform(
-        source: str,
-        target: str,
-        predicate,
-        transformer=None,
-        chunk_size: int = 10000,
-    ) -> int:
-        """
-        流式过滤和转换，分批写入。
-        返回处理的总行数。
-        """
-        count = 0
-        buffer: List[Dict] = []
-
-        with open(target, "w", encoding="utf-8", newline="") as out_f:
-            writer = None  # 延迟初始化
-
-            for row in CSVStreamProcessor.stream_read(source):
-                if predicate(row):
-                    if transformer:
-                        row = transformer(row)
-
-                    buffer.append(row)
-                    count += 1
-
-                    # 达到批次大小，批量写入
-                    if len(buffer) >= chunk_size:
-                        if writer is None:
-                            writer = csv.DictWriter(out_f, fieldnames=buffer[0].keys())
-                            writer.writeheader()
-                        writer.writerows(buffer)
-                        buffer.clear()
-
-            # 写入剩余数据
-            if buffer:
-                if writer is None:
-                    writer = csv.DictWriter(out_f, fieldnames=buffer[0].keys())
-                    writer.writeheader()
-                writer.writerows(buffer)
-
-        return count
-
-
-# 使用演示
-# processor = CSVStreamProcessor()
-# count = processor.filter_and_transform(
-#     "huge_input.csv",
-#     "filtered_output.csv",
-#     predicate=lambda row: int(row.get("age", 0)) >= 18,
-#     transformer=lambda row: {**row, "status": "valid"},
-# )
-# print(f"处理了 {count:,} 条记录")
+    # 遍历所有键，检查是否有对应的环境变量
+    for key in list(config.keys()):
+        env_val = os.getenv(f"APP_{key.upper()}")
+        if env_val is not None:
+            config[key] = type(config[key])(env_val)  # 保持原类型
+    return config
 ```
 
 ---
@@ -598,12 +264,10 @@ class CSVStreamProcessor:
 
 | 操作 | 代码 |
 |------|------|
-| 读整个文件 | `Path("f.txt").read_text()` |
-| 写整个文件 | `Path("f.txt").write_text("...")` |
-| 逐行读 | `for line in open("f.txt"):` |
-| JSON 读 | `json.load(open("f.json"))` |
-| JSON 写 | `json.dump(data, open("f.json","w"))` |
-| CSV 读 | `csv.DictReader(open("f.csv"))` |
-| CSV 写 | `csv.DictWriter(open("f.csv","w"))` |
-| 遍历目录 | `Path("dir").rglob("*.py")` |
-| 路径拼接 | `Path("dir") / "sub" / "file.txt"` |
+| 读全部文本 | `Path("f.txt").read_text()` |
+| 写全部文本 | `Path("f.txt").write_text("...")` |
+| 逐行读（大文件） | `for line in open("f.txt"):` |
+| JSON → dict | `json.loads(s)` / `json.load(f)` |
+| dict → JSON | `json.dumps(d)` / `json.dump(d, f)` |
+| 路径拼接 | `Path("a") / "b" / "c.txt"` |
+| 遍历目录 | `Path(".").rglob("*.py")` |
